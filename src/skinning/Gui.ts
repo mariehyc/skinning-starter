@@ -39,6 +39,7 @@ export class GUI implements IGUI {
   public selectedBone: number;
   private boneDragging: boolean = false;
   private boneSelected: boolean = false;
+  private rootTranslating: boolean = false;
   public closestBone!: Bone;
 
   public time: number;
@@ -125,7 +126,14 @@ export class GUI implements IGUI {
     this.prevY2 = mouse.offsetY;
 
     if (this.boneSelected) {
-      this.boneDragging = true;
+      const isRoot = this.closestBone && this.closestBone.parentIndex === -1;
+      if (isRoot && mouse.shiftKey) {
+        this.rootTranslating = true;
+        this.boneDragging = false;
+      } else {
+        this.rootTranslating = false;
+        this.boneDragging = true;
+      }
     }
   }
 
@@ -299,6 +307,16 @@ export class GUI implements IGUI {
 
       const rotation = this.closestBone.rotate((this.closestBone.dMat.toMat3().inverse()).multiplyVec3(this.camera.forward().normalize()), rotationAngle);
       this.closestBone.boneRotation(rotation);
+    } else if (this.dragging && this.rootTranslating && this.closestBone) {
+      const dx = mouse.screenX - this.prevX;
+      const dy = mouse.screenY - this.prevY;
+      this.prevX = mouse.screenX;
+      this.prevY = mouse.screenY;
+
+      const rightMove = this.camera.right().scale(-dx * GUI.panSpeed);
+      const upMove = this.camera.up().scale(dy * GUI.panSpeed);
+      const move = rightMove.add(upMove);
+      this.closestBone.boneTranslation(move);
     } else if (this.dragging) {
       const dx = mouse.screenX - this.prevX;
       const dy = mouse.screenY - this.prevY;
@@ -349,6 +367,7 @@ export class GUI implements IGUI {
     this.prevX = 0;
     this.prevY = 0;
     this.boneDragging = false;
+    this.rootTranslating = false;
   }
 
   public onKeydown(key: KeyboardEvent): void {
