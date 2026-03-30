@@ -1,13 +1,8 @@
 import { Camera } from "../lib/webglutils/Camera.js";
-import { CanvasAnimation } from "../lib/webglutils/CanvasAnimation.js";
 import { SkinningAnimation } from "./App.js";
-import { Mat4, Vec3, Vec4, Vec2, Mat2, Quat } from "../lib/TSM.js";
+import { Mat4, Vec3, Vec4, Vec2 } from "../lib/TSM.js";
 import { Bone } from "./Scene.js";
-import { RenderPass } from "../lib/webglutils/RenderPass.js";
 
-/**
- * Might be useful for designing any animation GUI
- */
 interface IGUI {
   viewMatrix(): Mat4;
   projMatrix(): Mat4;
@@ -22,23 +17,18 @@ export enum Mode {
   edit  
 }
 
-	
-/**
- * Handles Mouse and Button events along with
- * the the camera.
- */
-
 export class GUI implements IGUI {
   private static readonly rotationSpeed: number = 0.05;
   private static readonly zoomSpeed: number = 0.1;
   private static readonly rollSpeed: number = 0.1;
-  private static readonly panSpeed: number = 0.1;
 
-  private camera!: Camera;
-  private dragging!: boolean;
-  private fps!: boolean;
+  private camera: Camera;
+  private dragging: boolean;
+  private fps: boolean;
   private prevX: number;
   private prevY: number;
+  private prevX2: number;
+  private prevY2: number;
 
   private height: number;
   private viewPortHeight: number;
@@ -46,19 +36,17 @@ export class GUI implements IGUI {
 
   private animation: SkinningAnimation;
 
-  public time!: number;
-  public mode!: Mode;
+  public selectedBone: number;
+  private boneDragging: boolean = false;
+  private boneSelected: boolean = false;
+  public closestBone!: Bone;
+
+  public time: number;
+  public mode: Mode;
 
   public hoverX: number = 0;
   public hoverY: number = 0;
 
-
-  /**
-   *
-   * @param canvas required to get the width and height of the canvas
-   * @param animation required as a back pointer for some of the controls
-   * @param sponge required for some of the controls
-   */
   constructor(canvas: HTMLCanvasElement, animation: SkinningAnimation) {
     this.height = canvas.height;
     this.viewPortHeight = this.height - 200;
@@ -74,7 +62,6 @@ export class GUI implements IGUI {
   }
 
   public getNumKeyFrames(): number {
-    //TODO: Fix for the status bar in the GUI
     return 0;
   }
   
@@ -83,19 +70,15 @@ export class GUI implements IGUI {
   }
   
   public getMaxTime(): number { 
-    //TODO: The animation should stop after the last keyframe
     return 0;
   }
 
-  /**
-   * Resets the state of the GUI
-   */
   public reset(): void {
     this.fps = false;
     this.dragging = false;
     this.time = 0;
-	this.mode = Mode.edit;
-
+	  this.mode = Mode.edit;
+    
     this.camera = new Camera(
       new Vec3([0, 0, -6]),
       new Vec3([0, 0, 0]),
@@ -105,12 +88,11 @@ export class GUI implements IGUI {
       0.1,
       1000.0
     );
+    this.selectedBone = -1;
+    this.boneDragging = false;
+    this.boneSelected = false;
   }
 
-  /**
-   * Sets the GUI's camera to the given camera
-   * @param cam a new camera
-   */
   public setCamera(
     pos: Vec3,
     target: Vec3,
@@ -123,35 +105,28 @@ export class GUI implements IGUI {
     this.camera = new Camera(pos, target, upDir, fov, aspect, zNear, zFar);
   }
 
-  /**
-   * Returns the view matrix of the camera
-   */
   public viewMatrix(): Mat4 {
     return this.camera.viewMatrix();
   }
 
-  /**
-   * Returns the projection matrix of the camera
-   */
   public projMatrix(): Mat4 {
     return this.camera.projMatrix();
   }
 
-  /**
-   * Callback function for the start of a drag event.
-   * @param mouse
-   */
   public dragStart(mouse: MouseEvent): void {
     if (mouse.offsetY > 600) {
-      // outside the main panel
-      return;
+      return; 
     }
 	
-    // TODO: Add logic to rotate the bones, instead of moving the camera, if there is a currently highlighted bone
-    
     this.dragging = true;
     this.prevX = mouse.screenX;
     this.prevY = mouse.screenY;
+    this.prevX2 = mouse.offsetX;
+    this.prevY2 = mouse.offsetY;
+
+    if (this.boneSelected) {
+      this.boneDragging = true;
+    }
   }
 
   public incrementTime(dT: number): void {
@@ -163,24 +138,173 @@ export class GUI implements IGUI {
       }
     }
   }
-  
 
-  /**
-   * The callback function for a drag event.
-   * This event happens after dragStart and
-   * before dragEnd.
-   * @param mouse
-   */
+  private screenToWorldRay(x: number, y: number): { origin: Vec4; direction: Vec4 } {
+    const ndcX = (x / this.width) * 2 - 1;
+    const ndcY = 1 - (y / this.viewPortHeight) * 2;
+
+    const nearPoint = new Vec4([ndcX, ndcY, -1, 1]);
+    const farPoint = new Vec4([ndcX, ndcY, 1, 1]);
+
+    const invProjMatrix = this.camera.projMatrix().inverse();
+    const invViewMatrix = this.camera.viewMatrix().inverse();
+
+    const nearWorldPoint = nearPoint.multiplyMat4(invProjMatrix).multiplyMat4(invViewMatrix);
+    const farWorldPoint = farPoint.multiplyMat4(invProjMatrix).multiplyMat4(invViewMatrix);
+
+    nearWorldPoint.scale(1.0 / nearWorldPoint.w);
+    farWorldPoint.scale(1.0 / farWorldPoint.w);
+
+    const rayOrigin = new Vec4([nearWorldPoint.x, nearWorldPoint.y, nearWorldPoint.z, 1.0]);
+    const rayDirection = new Vec4([
+      farWorldPoint.x - nearWorldPoint.x,
+      farWorldPoint.y - nearWorldPoint.y,
+      farWorldPoint.z - nearWorldPoint.z,
+      0.0
+    ]).normalize();
+
+    return { origin: rayOrigin, direction: rayDirection };
+  }
+
+  private pickBone(rayOrigin: Vec4, rayDirection: Vec4): void {
+    let closestDistance = Number.MAX_VALUE;
+    let closestBoneIndex = -1;
+    const mesh = this.animation.getScene().meshes[0];
+
+    mesh.bones.forEach((bone, index) => {
+      const boneVec = bone.endpoint.copy().subtract(bone.position).normalize();
+      let randVec: Vec3;
+      if (Math.abs(boneVec.x) <= Math.abs(boneVec.y) && Math.abs(boneVec.x) <= Math.abs(boneVec.z)) {
+        randVec = new Vec3([1, 0, 0]);
+      } else if (Math.abs(boneVec.y) <= Math.abs(boneVec.x) && Math.abs(boneVec.y) <= Math.abs(boneVec.z)) {
+        randVec = new Vec3([0, 1, 0]);
+      } else {
+        randVec = new Vec3([0, 0, 1]);
+      }
+
+      const boneX = Vec3.cross(boneVec.copy(), randVec.copy()).normalize();
+      const boneZ = Vec3.cross(boneX.copy(), boneVec.copy()).normalize();
+
+      const translation = new Mat4([
+        1.0, 0.0, 0.0, 0.0,
+        0.0, 1.0, 0.0, 0.0,
+        0.0, 0.0, 1.0, 0.0,
+        -bone.position.x, -bone.position.y, -bone.position.z, 1.0
+      ]);
+
+      const rotation = new Mat4([
+        boneX.x, boneVec.x, boneZ.x, 0.0,
+        boneX.y, boneVec.y, boneZ.y, 0.0,
+        boneX.z, boneVec.z, boneZ.z, 0.0,
+        0.0, 0.0, 0.0, 1.0
+      ]);
+
+      const boneLocal = rotation.multiply(translation);
+      const rayOriginBone = boneLocal.multiplyVec4(rayOrigin);
+      const rayDirBone = boneLocal.multiplyVec4(rayDirection).normalize();
+
+      const boneLength = bone.endpoint.copy().subtract(bone.position).length();
+      const radius = 0.05;
+
+      let foundIntersection = false;
+      let tIntersect = Number.MAX_VALUE;
+
+      if (rayDirBone.y !== 0) {
+        const t1 = -rayOriginBone.y / rayDirBone.y;
+        const t2 = (boneLength - rayOriginBone.y) / rayDirBone.y;
+        [t1, t2].forEach(t => {
+          if (t >= 0) {
+            const px = rayOriginBone.x + rayDirBone.x * t;
+            const pz = rayOriginBone.z + rayDirBone.z * t;
+            if (px * px + pz * pz <= radius) {
+              if (t < tIntersect) {
+                tIntersect = t;
+                foundIntersection = true;
+              }
+            }
+          }
+        });
+      }
+
+      const a = rayDirBone.x * rayDirBone.x + rayDirBone.z * rayDirBone.z;
+      const b = 2 * (rayOriginBone.x * rayDirBone.x + rayOriginBone.z * rayDirBone.z);
+      const c = rayOriginBone.x * rayOriginBone.x + rayOriginBone.z * rayOriginBone.z - radius;
+
+      if (a !== 0) {
+        const discriminant = b * b - 4 * a * c;
+        if (discriminant >= 0.0) {
+          const t1 = (-b + Math.sqrt(discriminant)) / (2 * a);
+          const t2 = (-b - Math.sqrt(discriminant)) / (2 * a);
+          [t1, t2].filter(val => val >= 0.0).forEach(t => {
+            const intersectPoint = new Vec4([
+              rayOriginBone.x + rayDirBone.x * t,
+              rayOriginBone.y + rayDirBone.y * t,
+              rayOriginBone.z + rayDirBone.z * t,
+              1.0
+            ]);
+            if (intersectPoint.y >= 0 && intersectPoint.y <= boneLength) {
+              if (t < tIntersect) {
+                tIntersect = t;
+                foundIntersection = true;
+              }
+            }
+          });
+        }
+      }
+
+      if (foundIntersection && tIntersect < closestDistance) {
+        closestDistance = tIntersect;
+        closestBoneIndex = index;
+        this.closestBone = bone;
+        this.boneSelected = true;
+      }
+    });
+
+    if (closestBoneIndex === -1) {
+      this.boneSelected = false;
+      this.closestBone = null as any;
+    }
+
+    this.selectedBone = closestBoneIndex;
+  }
+
   public drag(mouse: MouseEvent): void {
-    let x = mouse.offsetX;
-    let y = mouse.offsetY;
-    if (this.dragging) {
+    const x = mouse.offsetX;
+    const y = mouse.offsetY;
+
+    const { origin, direction } = this.screenToWorldRay(x, y);
+
+    if (!this.dragging && !this.boneDragging) {
+      this.pickBone(origin, direction);
+    }
+
+    if (this.dragging && this.boneDragging && this.closestBone) {
+      const boneEndNDC = (new Vec4([this.closestBone.endpoint.x, this.closestBone.endpoint.y, this.closestBone.endpoint.z, 1.0]))
+        .multiplyMat4(this.camera.viewMatrix().copy()).multiplyMat4(this.camera.projMatrix().copy());
+      boneEndNDC.scale(1.0 / boneEndNDC.w);
+      const boneEndScreen = ((boneEndNDC.x + 1) / 2) * this.width;
+      const boneEndScreenY = ((1 - boneEndNDC.y) / 2) * this.viewPortHeight;
+      const boneEndScreenCoords = new Vec2([boneEndScreen, boneEndScreenY]);
+    
+      const boneNDC = (new Vec4([this.closestBone.position.x, this.closestBone.position.y, this.closestBone.position.z, 1.0]))
+        .multiplyMat4(this.camera.viewMatrix().copy()).multiplyMat4(this.camera.projMatrix().copy());
+      boneNDC.scale(1.0 / boneNDC.w);
+      const boneScreen = ((boneNDC.x + 1) / 2) * this.width;
+      const boneScreenY = ((1 - boneNDC.y) / 2) * this.viewPortHeight;
+      const boneScreenCoords = new Vec2([boneScreen, boneScreenY]);
+
+      const startVector = boneEndScreenCoords.subtract(boneScreenCoords).normalize();
+      const endVector = new Vec2([x, y]).subtract(boneScreenCoords).normalize();
+      const rotationAngle = (Math.atan2(startVector.y, startVector.x) - Math.atan2(endVector.y, endVector.x));
+
+      const rotation = this.closestBone.rotate((this.closestBone.dMat.toMat3().inverse()).multiplyVec3(this.camera.forward().normalize()), rotationAngle);
+      this.closestBone.boneRotation(rotation);
+    } else if (this.dragging) {
       const dx = mouse.screenX - this.prevX;
       const dy = mouse.screenY - this.prevY;
       this.prevX = mouse.screenX;
       this.prevY = mouse.screenY;
 
-      /* Left button, or primary button */
       const mouseDir: Vec3 = this.camera.right();
       mouseDir.scale(-dx);
       mouseDir.add(this.camera.up().scale(dy));
@@ -203,7 +327,6 @@ export class GUI implements IGUI {
           break;
         }
         case 2: {
-          /* Right button, or secondary button */
           this.camera.offsetDist(Math.sign(mouseDir.y) * GUI.zoomSpeed);
           break;
         }
@@ -211,13 +334,9 @@ export class GUI implements IGUI {
           break;
         }
       }
-    } 
-    // TODO: Add logic here:
-    // 1) To highlight a bone, if the mouse is hovering over a bone;
-    // 2) To rotate a bone, if the mouse button is pressed and currently highlighting a bone.
+    }
   }
   
- 
   public getModeString(): string {
     switch (this.mode) {
       case Mode.edit: { return "edit: " + this.getNumKeyFrames() + " keyframes"; }
@@ -225,23 +344,13 @@ export class GUI implements IGUI {
     }
   }
   
-  /**
-   * Callback function for the end of a drag event
-   * @param mouse
-   */
   public dragEnd(mouse: MouseEvent): void {
     this.dragging = false;
     this.prevX = 0;
     this.prevY = 0;
-	
-    // TODO: Handle ending highlight/dragging logic as needed
-  
+    this.boneDragging = false;
   }
 
-  /**
-   * Callback function for a key press event
-   * @param key
-   */
   public onKeydown(key: KeyboardEvent): void {
     switch (key.code) {
       case "Digit1": {
@@ -297,13 +406,19 @@ export class GUI implements IGUI {
         break;
       }
       case "ArrowLeft": {
-		//TODO: Handle bone rolls when a bone is selected
-		this.camera.roll(GUI.rollSpeed, false);
+        if (this.boneSelected && this.closestBone) {
+          this.closestBone.boneRotation(this.closestBone.rotate(new Vec3(this.closestBone.ogEndpoint2.subtract(this.closestBone.ogPosition2).xyz), -GUI.rollSpeed));
+        } else {
+          this.camera.roll(GUI.rollSpeed, false);
+        }
         break;
       }
       case "ArrowRight": {
-		//TODO: Handle bone rolls when a bone is selected
-		this.camera.roll(GUI.rollSpeed, true);
+        if (this.boneSelected && this.closestBone) {
+          this.closestBone.boneRotation(this.closestBone.rotate(new Vec3(this.closestBone.ogEndpoint2.subtract(this.closestBone.ogPosition2).xyz), GUI.rollSpeed));
+        } else {
+		      this.camera.roll(GUI.rollSpeed, true);
+        }
         break;
       }
       case "ArrowUp": {
@@ -314,19 +429,39 @@ export class GUI implements IGUI {
         this.camera.offset(this.camera.up().negate(), GUI.zoomSpeed, true);
         break;
       }
-      case "KeyK": {
-        if (this.mode === Mode.edit) {
-		//TODO: Add keyframes if required by project spec
+      case "KeyF": {
+        if (this.boneSelected && this.closestBone && this.closestBone.parentIndex === -1) {
+          this.closestBone.boneTranslation(this.camera.right().negate().scale(1 / 5));
         }
         break;
-      }      
-      case "KeyP": {
-        if (this.mode === Mode.edit && this.getNumKeyFrames() > 1)
-        {
-          this.mode = Mode.playback;
-          this.time = 0;
-        } else if (this.mode === Mode.playback) {
-          this.mode = Mode.edit;
+      }
+      case "KeyG": {
+        if (this.boneSelected && this.closestBone && this.closestBone.parentIndex === -1) {
+          this.closestBone.boneTranslation(this.camera.forward().scale(1 / 5));
+        }
+        break;
+      }
+      case "KeyT": {
+        if (this.boneSelected && this.closestBone && this.closestBone.parentIndex === -1) {
+          this.closestBone.boneTranslation(this.camera.forward().negate().scale(1 / 5));
+        }
+        break;
+      }
+      case "KeyH": {
+        if (this.boneSelected && this.closestBone && this.closestBone.parentIndex === -1) {
+          this.closestBone.boneTranslation(this.camera.right().scale(1 / 5));
+        }
+        break;
+      }
+      case "KeyO": {
+        if (this.boneSelected && this.closestBone && this.closestBone.parentIndex === -1) {
+          this.closestBone.boneTranslation(this.camera.up().scale(1 / 5));
+        }
+        break;
+      }
+      case "KeyL": {
+        if (this.boneSelected && this.closestBone && this.closestBone.parentIndex === -1) {
+          this.closestBone.boneTranslation(this.camera.up().negate().scale(1 / 5));
         }
         break;
       }
@@ -337,17 +472,11 @@ export class GUI implements IGUI {
     }
   }
 
-  /**
-   * Registers all event listeners for the GUI
-   * @param canvas The canvas being used
-   */
   private registerEventListeners(canvas: HTMLCanvasElement): void {
-    /* Event listener for key controls */
     window.addEventListener("keydown", (key: KeyboardEvent) =>
       this.onKeydown(key)
     );
 
-    /* Event listener for mouse controls */
     canvas.addEventListener("mousedown", (mouse: MouseEvent) =>
       this.dragStart(mouse)
     );
@@ -360,7 +489,6 @@ export class GUI implements IGUI {
       this.dragEnd(mouse)
     );
 
-    /* Event listener to stop the right click menu */
     canvas.addEventListener("contextmenu", (event: any) =>
       event.preventDefault()
     );

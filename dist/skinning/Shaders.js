@@ -16,7 +16,6 @@ export const floorVSText = `
         vClipPos = gl_Position;
     }
 `;
-
 export const floorFSText = `
     precision mediump float;
 
@@ -41,7 +40,6 @@ export const floorFSText = `
         gl_FragColor = vec4(clamp(dot_nl * color, 0.0, 1.0), 1.0);
     }
 `;
-
 export const sceneVSText = `
 precision mediump float;
 attribute vec3 vertPosition;
@@ -99,7 +97,6 @@ void main() {
     uv = aUV;
 }
 `;
-
 export const sceneFSText = `
     precision mediump float;
 
@@ -111,7 +108,6 @@ export const sceneFSText = `
         gl_FragColor = vec4((normal.x + 1.0)/2.0, (normal.y + 1.0)/2.0, (normal.z + 1.0)/2.0,1.0);
     }
 `;
-
 export const skeletonVSText = `
     precision mediump float;
 
@@ -141,7 +137,6 @@ export const skeletonVSText = `
         selectedboneindex = selectedBoneIndex;
     }
 `;
-
 export const skeletonFSText = ` 
     precision mediump float;
 
@@ -157,7 +152,6 @@ export const skeletonFSText = `
         }
     }
 `;
-
 export const cylinderVSText = `
 precision mediump float;
 attribute vec3 vertPosition;
@@ -176,14 +170,12 @@ void main() {
     gl_Position = mProj * mView * mWorld * vec4(worldPos, 1.0);
 }
 `;
-
 export const cylinderFSText = `
 precision mediump float;
 void main() {
     gl_FragColor = vec4(0.0, 1.0, 1.0, 1.0); 
 }
 `;
-
 export const sBackVSText = `
     precision mediump float;
 
@@ -198,7 +190,6 @@ export const sBackVSText = `
         uv.y = (1.0 + uv.y) / 2.0;
     }
 `;
-
 export const sBackFSText = `
     precision mediump float;
 
@@ -211,3 +202,4 @@ export const sBackFSText = `
         }
     }
 `;
+//# sourceMappingURL=Shaders.js.map
