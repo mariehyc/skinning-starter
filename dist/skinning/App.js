@@ -32,6 +32,10 @@ export class SkinningAnimation extends CanvasAnimation {
         this.initGui();
         this.millis = new Date().getTime();
         this.loadedScene = "None";
+        this.useLambert = false;
+        this.lambertColor = new Float32Array([0.0, 0.0, 0.6]);
+        this.defaultColor = new Float32Array([1.0, 1.0, 1.0]);
+        this.currentColor = this.defaultColor;
     }
     getScene() {
         return this.scene;
@@ -140,6 +144,12 @@ export class SkinningAnimation extends CanvasAnimation {
         this.sceneRenderPass.addUniform("jRots", (gl, loc) => {
             gl.uniform4fv(loc, this.scene.meshes[0].getBoneRotations());
         });
+        this.sceneRenderPass.addUniform("uLambert", (gl, loc) => {
+            gl.uniform1i(loc, this.useLambert ? 1 : 0);
+        });
+        this.sceneRenderPass.addUniform("baseColor", (gl, loc) => {
+            gl.uniform3fv(loc, this.currentColor);
+        });
         this.sceneRenderPass.setDrawData(this.ctx.TRIANGLES, this.scene.meshes[0].geometry.position.count, this.ctx.UNSIGNED_INT, 0);
         this.sceneRenderPass.setup();
     }
@@ -235,6 +245,8 @@ export class SkinningAnimation extends CanvasAnimation {
     }
     setScene(fileLocation) {
         this.loadedScene = fileLocation;
+        this.useLambert = fileLocation.includes("mapped_cube");
+        this.currentColor = this.useLambert ? this.lambertColor : this.defaultColor;
         this.scene = new CLoader(fileLocation);
         this.scene.load(() => this.initScene());
     }

@@ -26,6 +26,10 @@ export class SkinningAnimation extends CanvasAnimation {
   private millis: number;
 
   private loadedScene: string;
+  private useLambert: boolean;
+  private lambertColor: Float32Array;
+  private defaultColor: Float32Array;
+  private currentColor: Float32Array;
 
   private floor: Floor;
   private floorRenderPass: RenderPass;
@@ -73,9 +77,13 @@ export class SkinningAnimation extends CanvasAnimation {
 
     this.sBackRenderPass = new RenderPass(this.extVAO, gl, sBackVSText, sBackFSText);
     this.initGui();
-	
+		
     this.millis = new Date().getTime();
     this.loadedScene = "None";
+    this.useLambert = false;
+    this.lambertColor = new Float32Array([0.0, 0.0, 0.6]);
+    this.defaultColor = new Float32Array([1.0, 1.0, 1.0]);
+    this.currentColor = this.defaultColor;
   }
 
   public getScene(): CLoader {
@@ -216,6 +224,14 @@ export class SkinningAnimation extends CanvasAnimation {
       (gl, loc) => {
         gl.uniform4fv(loc, this.scene.meshes[0].getBoneRotations());
       });
+    this.sceneRenderPass.addUniform("uLambert",
+      (gl, loc) => {
+        gl.uniform1i(loc, this.useLambert ? 1 : 0);
+      });
+    this.sceneRenderPass.addUniform("baseColor",
+      (gl, loc) => {
+        gl.uniform3fv(loc, this.currentColor);
+      });
 
     this.sceneRenderPass.setDrawData(this.ctx.TRIANGLES, this.scene.meshes[0].geometry.position.count, this.ctx.UNSIGNED_INT, 0);
     this.sceneRenderPass.setup();
@@ -352,6 +368,8 @@ export class SkinningAnimation extends CanvasAnimation {
   
   public setScene(fileLocation: string): void {
     this.loadedScene = fileLocation;
+    this.useLambert = fileLocation.includes("mapped_cube");
+    this.currentColor = this.useLambert ? this.lambertColor : this.defaultColor;
     this.scene = new CLoader(fileLocation);
     this.scene.load(() => this.initScene());
   }

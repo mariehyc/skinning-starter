@@ -63,6 +63,8 @@ uniform mat4 mProj;
 
 uniform vec3 jTrans[64];
 uniform vec4 jRots[64];
+uniform bool uLambert;
+uniform vec3 baseColor;
 
 vec3 qtrans(vec4 q, vec3 v) {
     return v + 2.0 * cross(cross(v, q.xyz) - q.w*v, q.xyz);
@@ -104,8 +106,19 @@ export const sceneFSText = `
     varying vec2 uv;
     varying vec4 normal;
 
+    uniform bool uLambert;
+    uniform vec3 baseColor;
+
     void main () {
-        gl_FragColor = vec4((normal.x + 1.0)/2.0, (normal.y + 1.0)/2.0, (normal.z + 1.0)/2.0,1.0);
+        if (uLambert) {
+            vec3 n = normalize(normal.xyz);
+            vec3 l = normalize(lightDir.xyz);
+            float diffuse = max(dot(n, l), 0.0);
+            vec3 color = baseColor * diffuse;
+            gl_FragColor = vec4(color, 1.0);
+        } else {
+            gl_FragColor = vec4((normal.x + 1.0)/2.0, (normal.y + 1.0)/2.0, (normal.z + 1.0)/2.0,1.0);
+        }
     }
 `;
 export const skeletonVSText = `
