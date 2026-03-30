@@ -18,7 +18,7 @@ export class Attribute {
 export class MeshGeometry {
   position: Attribute;
   normal: Attribute;
-  uv: Attribute | null;
+  uv: Attribute | null = null;
   skinIndex: Attribute; // bones indices that affect each vertex
   skinWeight: Attribute; // weight of associated bone
   v0: Attribute; // position of each vertex of the mesh *in the coordinate system of bone skinIndex[0]'s joint*. Perhaps useful for LBS.

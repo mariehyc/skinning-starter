@@ -2,8 +2,8 @@ import { Debugger } from "../lib/webglutils/Debugging.js";
 import { CanvasAnimation, } from "../lib/webglutils/CanvasAnimation.js";
 import { Floor } from "../lib/webglutils/Floor.js";
 import { GUI } from "./Gui.js";
-import { sceneFSText, sceneVSText, floorFSText, floorVSText, skeletonFSText, skeletonVSText, cylinderVSText, cylinderFSText, sBackVSText, sBackFSText } from "./Shaders.js";
-import { Mat4, Vec4 } from "../lib/TSM.js";
+import { sceneFSText, sceneVSText, floorFSText, floorVSText, skeletonFSText, skeletonVSText, cylinderVSText, cylinderFSText, shadowVSText, shadowFSText, sBackVSText, sBackFSText } from "./Shaders.js";
+import { Mat4, Vec4, Vec3 } from "../lib/TSM.js";
 import { CLoader } from "./AnimationFileLoader.js";
 import { RenderPass } from "../lib/webglutils/RenderPass.js";
 import { Mesh } from "./Scene.js";
@@ -23,6 +23,7 @@ export class SkinningAnimation extends CanvasAnimation {
         this.sceneRenderPass = new RenderPass(this.extVAO, gl, sceneVSText, sceneFSText);
         this.skeletonRenderPass = new RenderPass(this.extVAO, gl, skeletonVSText, skeletonFSText);
         this.cylinderRenderPass = new RenderPass(this.extVAO, gl, cylinderVSText, cylinderFSText);
+        this.shadowRenderPass = new RenderPass(this.extVAO, gl, shadowVSText, shadowFSText);
         this.gui = new GUI(this.canvas2d, this);
         this.lightPosition = new Vec4([-10, 10, -10, 1]);
         this.backgroundColor = new Vec4([0.0, 0.37254903, 0.37254903, 1.0]);
@@ -36,6 +37,16 @@ export class SkinningAnimation extends CanvasAnimation {
         this.lambertColor = new Float32Array([0.0, 0.0, 0.6]);
         this.defaultColor = new Float32Array([1.0, 1.0, 1.0]);
         this.currentColor = this.defaultColor;
+        this.useTexture = false;
+        this.shadowFramebuffer = null;
+        this.shadowTexture = null;
+        this.shadowDepthBuffer = null;
+        this.shadowMapSize = 1024;
+        this.lightViewMatrix = Mat4.identity.copy();
+        this.lightProjMatrix = Mat4.identity.copy();
+        this.lightViewProjMatrix = Mat4.identity.copy();
+        this.initLightMatrices();
+        this.initShadowResources();
     }
     getScene() {
         return this.scene;
@@ -56,6 +67,7 @@ export class SkinningAnimation extends CanvasAnimation {
             return;
         }
         this.initModel();
+        this.initShadowPass();
         this.initSkeleton();
         this.initCylinders();
         this.gui.reset();
@@ -104,7 +116,12 @@ export class SkinningAnimation extends CanvasAnimation {
     }
     initModel() {
         this.sceneRenderPass = new RenderPass(this.extVAO, this.ctx, sceneVSText, sceneFSText);
-        const faceCount = this.scene.meshes[0].geometry.position.count / 3;
+        const mesh = this.scene.meshes[0];
+        this.useTexture = mesh.imgSrc !== null && mesh.imgSrc !== undefined;
+        if (this.useTexture && mesh.imgSrc) {
+            this.sceneRenderPass.addTextureMap(mesh.imgSrc.toString());
+        }
+        const faceCount = mesh.geometry.position.count / 3;
         const fIndices = new Uint32Array(faceCount * 3);
         for (let i = 0; i < faceCount * 3; i += 3) {
             fIndices[i] = i;
@@ -112,20 +129,20 @@ export class SkinningAnimation extends CanvasAnimation {
             fIndices[i + 2] = i + 2;
         }
         this.sceneRenderPass.setIndexBufferData(fIndices);
-        this.sceneRenderPass.addAttribute("vertPosition", 3, this.ctx.FLOAT, false, 3 * Float32Array.BYTES_PER_ELEMENT, 0, undefined, this.scene.meshes[0].geometry.position.values);
-        this.sceneRenderPass.addAttribute("aNorm", 3, this.ctx.FLOAT, false, 3 * Float32Array.BYTES_PER_ELEMENT, 0, undefined, this.scene.meshes[0].geometry.normal.values);
-        if (this.scene.meshes[0].geometry.uv) {
-            this.sceneRenderPass.addAttribute("aUV", 2, this.ctx.FLOAT, false, 2 * Float32Array.BYTES_PER_ELEMENT, 0, undefined, this.scene.meshes[0].geometry.uv.values);
+        this.sceneRenderPass.addAttribute("vertPosition", 3, this.ctx.FLOAT, false, 3 * Float32Array.BYTES_PER_ELEMENT, 0, undefined, mesh.geometry.position.values);
+        this.sceneRenderPass.addAttribute("aNorm", 3, this.ctx.FLOAT, false, 3 * Float32Array.BYTES_PER_ELEMENT, 0, undefined, mesh.geometry.normal.values);
+        if (mesh.geometry.uv) {
+            this.sceneRenderPass.addAttribute("aUV", 2, this.ctx.FLOAT, false, 2 * Float32Array.BYTES_PER_ELEMENT, 0, undefined, mesh.geometry.uv.values);
         }
         else {
-            this.sceneRenderPass.addAttribute("aUV", 2, this.ctx.FLOAT, false, 2 * Float32Array.BYTES_PER_ELEMENT, 0, undefined, new Float32Array(this.scene.meshes[0].geometry.normal.values.length));
+            this.sceneRenderPass.addAttribute("aUV", 2, this.ctx.FLOAT, false, 2 * Float32Array.BYTES_PER_ELEMENT, 0, undefined, new Float32Array(mesh.geometry.normal.values.length));
         }
-        this.sceneRenderPass.addAttribute("skinIndices", 4, this.ctx.FLOAT, false, 4 * Float32Array.BYTES_PER_ELEMENT, 0, undefined, this.scene.meshes[0].geometry.skinIndex.values);
-        this.sceneRenderPass.addAttribute("skinWeights", 4, this.ctx.FLOAT, false, 4 * Float32Array.BYTES_PER_ELEMENT, 0, undefined, this.scene.meshes[0].geometry.skinWeight.values);
-        this.sceneRenderPass.addAttribute("v0", 3, this.ctx.FLOAT, false, 3 * Float32Array.BYTES_PER_ELEMENT, 0, undefined, this.scene.meshes[0].geometry.v0.values);
-        this.sceneRenderPass.addAttribute("v1", 3, this.ctx.FLOAT, false, 3 * Float32Array.BYTES_PER_ELEMENT, 0, undefined, this.scene.meshes[0].geometry.v1.values);
-        this.sceneRenderPass.addAttribute("v2", 3, this.ctx.FLOAT, false, 3 * Float32Array.BYTES_PER_ELEMENT, 0, undefined, this.scene.meshes[0].geometry.v2.values);
-        this.sceneRenderPass.addAttribute("v3", 3, this.ctx.FLOAT, false, 3 * Float32Array.BYTES_PER_ELEMENT, 0, undefined, this.scene.meshes[0].geometry.v3.values);
+        this.sceneRenderPass.addAttribute("skinIndices", 4, this.ctx.FLOAT, false, 4 * Float32Array.BYTES_PER_ELEMENT, 0, undefined, mesh.geometry.skinIndex.values);
+        this.sceneRenderPass.addAttribute("skinWeights", 4, this.ctx.FLOAT, false, 4 * Float32Array.BYTES_PER_ELEMENT, 0, undefined, mesh.geometry.skinWeight.values);
+        this.sceneRenderPass.addAttribute("v0", 3, this.ctx.FLOAT, false, 3 * Float32Array.BYTES_PER_ELEMENT, 0, undefined, mesh.geometry.v0.values);
+        this.sceneRenderPass.addAttribute("v1", 3, this.ctx.FLOAT, false, 3 * Float32Array.BYTES_PER_ELEMENT, 0, undefined, mesh.geometry.v1.values);
+        this.sceneRenderPass.addAttribute("v2", 3, this.ctx.FLOAT, false, 3 * Float32Array.BYTES_PER_ELEMENT, 0, undefined, mesh.geometry.v2.values);
+        this.sceneRenderPass.addAttribute("v3", 3, this.ctx.FLOAT, false, 3 * Float32Array.BYTES_PER_ELEMENT, 0, undefined, mesh.geometry.v3.values);
         this.sceneRenderPass.addUniform("lightPosition", (gl, loc) => {
             gl.uniform4fv(loc, this.lightPosition.xyzw);
         });
@@ -139,10 +156,10 @@ export class SkinningAnimation extends CanvasAnimation {
             gl.uniformMatrix4fv(loc, false, new Float32Array(this.gui.viewMatrix().all()));
         });
         this.sceneRenderPass.addUniform("jTrans", (gl, loc) => {
-            gl.uniform3fv(loc, this.scene.meshes[0].getBoneTranslations());
+            gl.uniform3fv(loc, mesh.getBoneTranslations());
         });
         this.sceneRenderPass.addUniform("jRots", (gl, loc) => {
-            gl.uniform4fv(loc, this.scene.meshes[0].getBoneRotations());
+            gl.uniform4fv(loc, mesh.getBoneRotations());
         });
         this.sceneRenderPass.addUniform("uLambert", (gl, loc) => {
             gl.uniform1i(loc, this.useLambert ? 1 : 0);
@@ -150,8 +167,92 @@ export class SkinningAnimation extends CanvasAnimation {
         this.sceneRenderPass.addUniform("baseColor", (gl, loc) => {
             gl.uniform3fv(loc, this.currentColor);
         });
-        this.sceneRenderPass.setDrawData(this.ctx.TRIANGLES, this.scene.meshes[0].geometry.position.count, this.ctx.UNSIGNED_INT, 0);
+        this.sceneRenderPass.addUniform("uUseTexture", (gl, loc) => {
+            gl.uniform1i(loc, this.useTexture ? 1 : 0);
+        });
+        this.sceneRenderPass.addUniform("uSampler", (gl, loc) => {
+            gl.uniform1i(loc, 0);
+        });
+        this.sceneRenderPass.addUniform("lightViewProj", (gl, loc) => {
+            gl.uniformMatrix4fv(loc, false, new Float32Array(this.lightViewProjMatrix.all()));
+        });
+        this.sceneRenderPass.addUniform("uUseShadow", (gl, loc) => {
+            gl.uniform1i(loc, 1);
+        });
+        this.sceneRenderPass.addUniform("uShadowMap", (gl, loc) => {
+            gl.uniform1i(loc, 1);
+            if (this.shadowTexture) {
+                gl.activeTexture(gl.TEXTURE1);
+                gl.bindTexture(gl.TEXTURE_2D, this.shadowTexture);
+                gl.activeTexture(gl.TEXTURE0);
+            }
+        });
+        this.sceneRenderPass.setDrawData(this.ctx.TRIANGLES, mesh.geometry.position.count, this.ctx.UNSIGNED_INT, 0);
         this.sceneRenderPass.setup();
+    }
+    initShadowPass() {
+        this.shadowRenderPass = new RenderPass(this.extVAO, this.ctx, shadowVSText, shadowFSText);
+        const mesh = this.scene.meshes[0];
+        const faceCount = mesh.geometry.position.count / 3;
+        const fIndices = new Uint32Array(faceCount * 3);
+        for (let i = 0; i < faceCount * 3; i += 3) {
+            fIndices[i] = i;
+            fIndices[i + 1] = i + 1;
+            fIndices[i + 2] = i + 2;
+        }
+        this.shadowRenderPass.setIndexBufferData(fIndices);
+        this.shadowRenderPass.addAttribute("vertPosition", 3, this.ctx.FLOAT, false, 3 * Float32Array.BYTES_PER_ELEMENT, 0, undefined, mesh.geometry.position.values);
+        this.shadowRenderPass.addAttribute("skinIndices", 4, this.ctx.FLOAT, false, 4 * Float32Array.BYTES_PER_ELEMENT, 0, undefined, mesh.geometry.skinIndex.values);
+        this.shadowRenderPass.addAttribute("skinWeights", 4, this.ctx.FLOAT, false, 4 * Float32Array.BYTES_PER_ELEMENT, 0, undefined, mesh.geometry.skinWeight.values);
+        this.shadowRenderPass.addAttribute("v0", 3, this.ctx.FLOAT, false, 3 * Float32Array.BYTES_PER_ELEMENT, 0, undefined, mesh.geometry.v0.values);
+        this.shadowRenderPass.addAttribute("v1", 3, this.ctx.FLOAT, false, 3 * Float32Array.BYTES_PER_ELEMENT, 0, undefined, mesh.geometry.v1.values);
+        this.shadowRenderPass.addAttribute("v2", 3, this.ctx.FLOAT, false, 3 * Float32Array.BYTES_PER_ELEMENT, 0, undefined, mesh.geometry.v2.values);
+        this.shadowRenderPass.addAttribute("v3", 3, this.ctx.FLOAT, false, 3 * Float32Array.BYTES_PER_ELEMENT, 0, undefined, mesh.geometry.v3.values);
+        this.shadowRenderPass.addUniform("mWorld", (gl, loc) => {
+            gl.uniformMatrix4fv(loc, false, new Float32Array(new Mat4().setIdentity().all()));
+        });
+        this.shadowRenderPass.addUniform("lightViewProj", (gl, loc) => {
+            gl.uniformMatrix4fv(loc, false, new Float32Array(this.lightViewProjMatrix.all()));
+        });
+        this.shadowRenderPass.addUniform("jTrans", (gl, loc) => {
+            gl.uniform3fv(loc, mesh.getBoneTranslations());
+        });
+        this.shadowRenderPass.addUniform("jRots", (gl, loc) => {
+            gl.uniform4fv(loc, mesh.getBoneRotations());
+        });
+        this.shadowRenderPass.setDrawData(this.ctx.TRIANGLES, mesh.geometry.position.count, this.ctx.UNSIGNED_INT, 0);
+        this.shadowRenderPass.setup();
+    }
+    initLightMatrices() {
+        const eye = new Vec3([this.lightPosition.x, this.lightPosition.y, this.lightPosition.z]);
+        const target = new Vec3([0, 0, 0]);
+        this.lightViewMatrix = Mat4.lookAt(eye, target, new Vec3([0, 1, 0]));
+        this.lightProjMatrix = Mat4.orthographic(-15, 15, -15, 15, 1, 60);
+        this.lightViewProjMatrix = this.lightProjMatrix.copy().multiply(this.lightViewMatrix);
+    }
+    initShadowResources() {
+        const gl = this.ctx;
+        this.shadowFramebuffer = gl.createFramebuffer();
+        this.shadowTexture = gl.createTexture();
+        this.shadowDepthBuffer = gl.createRenderbuffer();
+        if (!this.shadowFramebuffer || !this.shadowTexture || !this.shadowDepthBuffer) {
+            console.error("Failed to create shadow resources");
+            return;
+        }
+        gl.bindTexture(gl.TEXTURE_2D, this.shadowTexture);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, this.shadowMapSize, this.shadowMapSize, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        gl.bindRenderbuffer(gl.RENDERBUFFER, this.shadowDepthBuffer);
+        gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT16, this.shadowMapSize, this.shadowMapSize);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, this.shadowFramebuffer);
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, this.shadowTexture, 0);
+        gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, this.shadowDepthBuffer);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+        gl.bindTexture(gl.TEXTURE_2D, null);
+        gl.bindRenderbuffer(gl.RENDERBUFFER, null);
     }
     initSkeleton() {
         this.skeletonRenderPass.setIndexBufferData(this.scene.meshes[0].getBoneIndices());
@@ -199,8 +300,35 @@ export class SkinningAnimation extends CanvasAnimation {
         this.floorRenderPass.addUniform("uViewInv", (gl, loc) => {
             gl.uniformMatrix4fv(loc, false, new Float32Array(this.gui.viewMatrix().inverse().all()));
         });
+        this.floorRenderPass.addUniform("lightViewProj", (gl, loc) => {
+            gl.uniformMatrix4fv(loc, false, new Float32Array(this.lightViewProjMatrix.all()));
+        });
+        this.floorRenderPass.addUniform("uUseShadow", (gl, loc) => {
+            gl.uniform1i(loc, 1);
+        });
+        this.floorRenderPass.addUniform("uShadowMap", (gl, loc) => {
+            gl.uniform1i(loc, 1);
+            if (this.shadowTexture) {
+                gl.activeTexture(gl.TEXTURE1);
+                gl.bindTexture(gl.TEXTURE_2D, this.shadowTexture);
+                gl.activeTexture(gl.TEXTURE0);
+            }
+        });
         this.floorRenderPass.setDrawData(this.ctx.TRIANGLES, this.floor.indicesFlat().length, this.ctx.UNSIGNED_INT, 0);
         this.floorRenderPass.setup();
+    }
+    renderShadowMap() {
+        if (!this.shadowFramebuffer || this.scene.meshes.length === 0) {
+            return;
+        }
+        const gl = this.ctx;
+        gl.bindFramebuffer(gl.FRAMEBUFFER, this.shadowFramebuffer);
+        gl.viewport(0, 0, this.shadowMapSize, this.shadowMapSize);
+        gl.clearColor(1.0, 1.0, 1.0, 1.0);
+        gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+        gl.enable(gl.DEPTH_TEST);
+        this.shadowRenderPass.draw();
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     }
     draw() {
         const curr = new Date().getTime();
@@ -208,6 +336,7 @@ export class SkinningAnimation extends CanvasAnimation {
         this.millis = curr;
         deltaT /= 1000;
         this.getGUI().incrementTime(deltaT);
+        this.renderShadowMap();
         if (this.ctx2) {
             this.ctx2.clearRect(0, 0, this.ctx2.canvas.width, this.ctx2.canvas.height);
             if (this.scene.meshes.length > 0) {
@@ -215,6 +344,7 @@ export class SkinningAnimation extends CanvasAnimation {
             }
         }
         const gl = this.ctx;
+        gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
         const bg = this.backgroundColor;
         gl.clearColor(bg.r, bg.g, bg.b, bg.a);
         gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
@@ -247,6 +377,7 @@ export class SkinningAnimation extends CanvasAnimation {
         this.loadedScene = fileLocation;
         this.useLambert = fileLocation.includes("mapped_cube");
         this.currentColor = this.useLambert ? this.lambertColor : this.defaultColor;
+        this.useTexture = false;
         this.scene = new CLoader(fileLocation);
         this.scene.load(() => this.initScene());
     }

@@ -10,6 +10,7 @@ export class Attribute {
 //Class for handling mesh vertices and skin weights
 export class MeshGeometry {
     constructor(mesh) {
+        this.uv = null;
         this.position = new Attribute(mesh.position);
         this.normal = new Attribute(mesh.normal);
         if (mesh.uv) {

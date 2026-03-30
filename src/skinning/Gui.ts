@@ -21,10 +21,11 @@ export class GUI implements IGUI {
   private static readonly rotationSpeed: number = 0.05;
   private static readonly zoomSpeed: number = 0.1;
   private static readonly rollSpeed: number = 0.1;
+  private static readonly panSpeed: number = 0.1;
 
-  private camera: Camera;
-  private dragging: boolean;
-  private fps: boolean;
+  private camera!: Camera;
+  private dragging!: boolean;
+  private fps!: boolean;
   private prevX: number;
   private prevY: number;
   private prevX2: number;
@@ -36,14 +37,14 @@ export class GUI implements IGUI {
 
   private animation: SkinningAnimation;
 
-  public selectedBone: number;
+  public selectedBone: number = -1;
   private boneDragging: boolean = false;
   private boneSelected: boolean = false;
   private rootTranslating: boolean = false;
   public closestBone!: Bone;
 
-  public time: number;
-  public mode: Mode;
+  public time: number = 0;
+  public mode: Mode = Mode.edit;
 
   public hoverX: number = 0;
   public hoverY: number = 0;
@@ -54,6 +55,8 @@ export class GUI implements IGUI {
     this.width = canvas.width;
     this.prevX = 0;
     this.prevY = 0;
+    this.prevX2 = 0;
+    this.prevY2 = 0;
     
     this.animation = animation;
     

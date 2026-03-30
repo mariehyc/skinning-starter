@@ -7,8 +7,12 @@ export var Mode;
 })(Mode || (Mode = {}));
 export class GUI {
     constructor(canvas, animation) {
+        this.selectedBone = -1;
         this.boneDragging = false;
         this.boneSelected = false;
+        this.rootTranslating = false;
+        this.time = 0;
+        this.mode = Mode.edit;
         this.hoverX = 0;
         this.hoverY = 0;
         this.height = canvas.height;
@@ -16,6 +20,8 @@ export class GUI {
         this.width = canvas.width;
         this.prevX = 0;
         this.prevY = 0;
+        this.prevX2 = 0;
+        this.prevY2 = 0;
         this.animation = animation;
         this.reset();
         this.registerEventListeners(canvas);
@@ -58,7 +64,15 @@ export class GUI {
         this.prevX2 = mouse.offsetX;
         this.prevY2 = mouse.offsetY;
         if (this.boneSelected) {
-            this.boneDragging = true;
+            const isRoot = this.closestBone && this.closestBone.parentIndex === -1;
+            if (isRoot && mouse.shiftKey) {
+                this.rootTranslating = true;
+                this.boneDragging = false;
+            }
+            else {
+                this.rootTranslating = false;
+                this.boneDragging = true;
+            }
         }
     }
     incrementTime(dT) {
@@ -206,6 +220,16 @@ export class GUI {
             const rotation = this.closestBone.rotate((this.closestBone.dMat.toMat3().inverse()).multiplyVec3(this.camera.forward().normalize()), rotationAngle);
             this.closestBone.boneRotation(rotation);
         }
+        else if (this.dragging && this.rootTranslating && this.closestBone) {
+            const dx = mouse.screenX - this.prevX;
+            const dy = mouse.screenY - this.prevY;
+            this.prevX = mouse.screenX;
+            this.prevY = mouse.screenY;
+            const rightMove = this.camera.right().scale(-dx * GUI.panSpeed);
+            const upMove = this.camera.up().scale(dy * GUI.panSpeed);
+            const move = rightMove.add(upMove);
+            this.closestBone.boneTranslation(move);
+        }
         else if (this.dragging) {
             const dx = mouse.screenX - this.prevX;
             const dy = mouse.screenY - this.prevY;
@@ -255,6 +279,7 @@ export class GUI {
         this.prevX = 0;
         this.prevY = 0;
         this.boneDragging = false;
+        this.rootTranslating = false;
     }
     onKeydown(key) {
         switch (key.code) {
@@ -385,4 +410,5 @@ export class GUI {
 GUI.rotationSpeed = 0.05;
 GUI.zoomSpeed = 0.1;
 GUI.rollSpeed = 0.1;
+GUI.panSpeed = 0.1;
 //# sourceMappingURL=Gui.js.map
