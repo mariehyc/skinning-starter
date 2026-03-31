@@ -2,6 +2,8 @@ Team Members:
 Marie Cho (mhc2323)
 Harini Majety (hpm385)
 
+ ---
+
 Extra Credit:
 
  Root Joint Translation
@@ -41,10 +43,11 @@ How to Use
 * Run the program normally.
 * Load a scene that includes texture coordinates 
 * The texture will automatically be applied if the scene supports it.
+ ---
 
  Shadow Mapping
 
- ---
+
 
 Description
 Shadow mapping has been implemented to render realistic shadows cast by the character onto itself and the ground plane.
