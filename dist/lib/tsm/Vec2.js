@@ -5,17 +5,6 @@ import { epsilon } from "./Constants.js";
  */
 export class Vec2 {
     /**
-     * Creates a new Vec2. If values is provided then the Vec3
-     * is initialized to those values, otherwise, the Vec3 is
-     * initialized with all zeros.
-     */
-    constructor(values) {
-        this.values = new Float32Array(2);
-        if (values !== undefined) {
-            this.xy = values;
-        }
-    }
-    /**
      * Swizzle Operators
      */
     get x() {
@@ -166,6 +155,17 @@ export class Vec2 {
         dest.x = vector.x / vector2.x;
         dest.y = vector.y / vector2.y;
         return dest;
+    }
+    /**
+     * Creates a new Vec2. If values is provided then the Vec3
+     * is initialized to those values, otherwise, the Vec3 is
+     * initialized with all zeros.
+     */
+    constructor(values) {
+        this.values = new Float32Array(2);
+        if (values !== undefined) {
+            this.xy = values;
+        }
     }
     /**
      * Returns the element at the given index.

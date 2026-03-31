@@ -10,17 +10,6 @@ import { epsilon } from "./Constants.js";
  */
 export class Quat {
     /**
-     * Creates a new Quat initialized to the given values.
-     * If values are not given then the Quat is initialized to
-     * all zeros.
-     */
-    constructor(values) {
-        this.values = new Float32Array(4);
-        if (values !== undefined) {
-            this.xyzw = values;
-        }
-    }
-    /**
      * Swizzle operators
      */
     get x() {
@@ -238,6 +227,17 @@ export class Quat {
         dest.z = axis.z * sin;
         dest.w = Math.cos(angle);
         return dest;
+    }
+    /**
+     * Creates a new Quat initialized to the given values.
+     * If values are not given then the Quat is initialized to
+     * all zeros.
+     */
+    constructor(values) {
+        this.values = new Float32Array(4);
+        if (values !== undefined) {
+            this.xyzw = values;
+        }
     }
     /**
      * Returns the element at the given index.

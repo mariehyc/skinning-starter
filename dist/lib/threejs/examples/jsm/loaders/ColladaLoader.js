@@ -544,7 +544,7 @@ ColladaLoader.prototype = Object.assign(Object.create(Loader.prototype), {
         function buildSkin(data) {
             var BONE_LIMIT = 4;
             var build = {
-                joints: [],
+                joints: [], // this must be an array to preserve the joint order
                 indices: {
                     array: [],
                     stride: BONE_LIMIT

@@ -464,13 +464,13 @@ Debugger.glValidEnumContexts = {
     'blendEquationEXT': { 1: { 0: true } },
     // WebGL 2 Buffer objects
     'bufferData': {
-        3: { 0: true, 2: true },
-        4: { 0: true, 2: true },
+        3: { 0: true, 2: true }, // WebGL 1
+        4: { 0: true, 2: true }, // WebGL 2
         5: { 0: true, 2: true } // WebGL 2
     },
     'bufferSubData': {
-        3: { 0: true },
-        4: { 0: true },
+        3: { 0: true }, // WebGL 1
+        4: { 0: true }, // WebGL 2
         5: { 0: true } // WebGL 2
     },
     'copyBufferSubData': { 5: { 0: true, 1: true } },
@@ -488,8 +488,8 @@ Debugger.glValidEnumContexts = {
     'texStorage2D': { 5: { 0: true, 2: true } },
     'texStorage3D': { 6: { 0: true, 2: true } },
     'texImage2D': {
-        9: { 0: true, 2: true, 6: true, 7: true },
-        6: { 0: true, 2: true, 3: true, 4: true },
+        9: { 0: true, 2: true, 6: true, 7: true }, // WebGL 1 & 2
+        6: { 0: true, 2: true, 3: true, 4: true }, // WebGL 1
         10: { 0: true, 2: true, 6: true, 7: true } // WebGL 2
     },
     'texImage3D': {
@@ -497,8 +497,8 @@ Debugger.glValidEnumContexts = {
         11: { 0: true, 2: true, 7: true, 8: true }
     },
     'texSubImage2D': {
-        9: { 0: true, 6: true, 7: true },
-        7: { 0: true, 4: true, 5: true },
+        9: { 0: true, 6: true, 7: true }, // WebGL 1 & 2
+        7: { 0: true, 4: true, 5: true }, // WebGL 1
         10: { 0: true, 6: true, 7: true } // WebGL 2
     },
     'texSubImage3D': {
@@ -507,8 +507,8 @@ Debugger.glValidEnumContexts = {
     },
     'copyTexSubImage3D': { 9: { 0: true } },
     'compressedTexImage2D': {
-        7: { 0: true, 2: true },
-        8: { 0: true, 2: true },
+        7: { 0: true, 2: true }, // WebGL 1 & 2
+        8: { 0: true, 2: true }, // WebGL 2
         9: { 0: true, 2: true } // WebGL 2
     },
     'compressedTexImage3D': {
@@ -517,8 +517,8 @@ Debugger.glValidEnumContexts = {
         10: { 0: true, 2: true }
     },
     'compressedTexSubImage2D': {
-        8: { 0: true, 6: true },
-        9: { 0: true, 6: true },
+        8: { 0: true, 6: true }, // WebGL 1 & 2
+        9: { 0: true, 6: true }, // WebGL 2
         10: { 0: true, 6: true } // WebGL 2
     },
     'compressedTexSubImage3D': {
@@ -534,7 +534,7 @@ Debugger.glValidEnumContexts = {
     'drawRangeElements': { 6: { 0: true, 4: true } },
     // WebGL 2 Reading back pixels
     'readPixels': {
-        7: { 4: true, 5: true },
+        7: { 4: true, 5: true }, // WebGL 1 & 2
         8: { 4: true, 5: true } // WebGL 2
     },
     // WebGL 2 Multiple Render Targets

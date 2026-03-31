@@ -5,17 +5,6 @@ import { epsilon } from "./Constants.js";
  */
 export class Mat2 {
     /**
-     * Creates a new Mat2 initialized to the given
-     * values. If values is not provided then the Mat2
-     * is initialized to all zeros.
-     */
-    constructor(values) {
-        this.values = new Float32Array(4);
-        if (values !== undefined) {
-            this.init(values);
-        }
-    }
-    /**
      * Computes the matrix product m1 * m2 and puts the result
      * in result.
      */
@@ -34,6 +23,17 @@ export class Mat2 {
             a10 * m2.at(2) + a11 * m2.at(3)
         ]);
         return dest;
+    }
+    /**
+     * Creates a new Mat2 initialized to the given
+     * values. If values is not provided then the Mat2
+     * is initialized to all zeros.
+     */
+    constructor(values) {
+        this.values = new Float32Array(4);
+        if (values !== undefined) {
+            this.init(values);
+        }
     }
     /**
      * Returns the element at the given index.

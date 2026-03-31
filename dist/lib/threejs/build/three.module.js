@@ -8257,9 +8257,9 @@ function ShaderMaterial(parameters) {
     this.morphTargets = false; // set to use morph targets
     this.morphNormals = false; // set to use morph normals
     this.extensions = {
-        derivatives: false,
-        fragDepth: false,
-        drawBuffers: false,
+        derivatives: false, // set to use derivatives
+        fragDepth: false, // set to use fragment depth values
+        drawBuffers: false, // set to use draw buffers
         shaderTextureLOD: false // set to use shader texture LOD
     };
     // When rendered geometry doesn't include these attributes but the material does,
@@ -11317,7 +11317,7 @@ function WebGLProgram(renderer, cacheKey, parameters) {
             generatePrecision(parameters),
             '#define SHADER_NAME ' + parameters.shaderName,
             customDefines,
-            parameters.alphaTest ? '#define ALPHATEST ' + parameters.alphaTest + (parameters.alphaTest % 1 ? '' : '.0') : '',
+            parameters.alphaTest ? '#define ALPHATEST ' + parameters.alphaTest + (parameters.alphaTest % 1 ? '' : '.0') : '', // add '.0' if integer
             '#define GAMMA_FACTOR ' + gammaFactorDefine,
             (parameters.useFog && parameters.fog) ? '#define USE_FOG' : '',
             (parameters.useFog && parameters.fogExp2) ? '#define FOG_EXP2' : '',
@@ -11361,11 +11361,11 @@ function WebGLProgram(renderer, cacheKey, parameters) {
             'uniform vec3 cameraPosition;',
             'uniform bool isOrthographic;',
             (parameters.toneMapping !== NoToneMapping) ? '#define TONE_MAPPING' : '',
-            (parameters.toneMapping !== NoToneMapping) ? ShaderChunk['tonemapping_pars_fragment'] : '',
+            (parameters.toneMapping !== NoToneMapping) ? ShaderChunk['tonemapping_pars_fragment'] : '', // this code is required here because it is used by the toneMapping() function defined below
             (parameters.toneMapping !== NoToneMapping) ? getToneMappingFunction('toneMapping', parameters.toneMapping) : '',
             parameters.dithering ? '#define DITHERING' : '',
             (parameters.outputEncoding || parameters.mapEncoding || parameters.matcapEncoding || parameters.envMapEncoding || parameters.emissiveMapEncoding || parameters.lightMapEncoding) ?
-                ShaderChunk['encodings_pars_fragment'] : '',
+                ShaderChunk['encodings_pars_fragment'] : '', // this code is required here because it is used by the various encoding/decoding function defined below
             parameters.mapEncoding ? getTexelDecodingFunction('mapTexelToLinear', parameters.mapEncoding) : '',
             parameters.matcapEncoding ? getTexelDecodingFunction('matcapTexelToLinear', parameters.matcapEncoding) : '',
             parameters.envMapEncoding ? getTexelDecodingFunction('envMapTexelToLinear', parameters.envMapEncoding) : '',
@@ -21468,7 +21468,7 @@ Object.assign(Interpolant.prototype, {
         } // validate_interval
         return this.interpolate_(i1, t0, t, t1);
     },
-    settings: null,
+    settings: null, // optional, subclass-specific settings structure
     // Note: The indirection allows central control of many interpolants.
     // --- Protected interface
     DefaultSettings_: {},
@@ -26912,7 +26912,7 @@ Object.assign(PropertyBinding, {
             nodeName: matches[2],
             objectName: matches[3],
             objectIndex: matches[4],
-            propertyName: matches[5],
+            propertyName: matches[5], // required
             propertyIndex: matches[6]
         };
         var lastDot = results.nodeName && results.nodeName.lastIndexOf('.');

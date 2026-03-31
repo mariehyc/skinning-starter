@@ -10,17 +10,6 @@ import { epsilon } from "./Constants.js";
  */
 export class Mat4 {
     /**
-     * Creates a new Mat4 initialized to the given
-     * values. If values is not provided then the Mat4
-     * is initialized to all zeros.
-     */
-    constructor(values) {
-        this.values = new Float32Array(16);
-        if (values !== undefined) {
-            this.init(values);
-        }
-    }
-    /**
      * Computes the frustrum matrix
      * @param left coordinate for the left vertical clipping plane
      * @param right coordinate for the right vertical clipping plane
@@ -199,6 +188,17 @@ export class Mat4 {
             a30 * b03 + a31 * b13 + a32 * b23 + a33 * b33
         ]);
         return dest;
+    }
+    /**
+     * Creates a new Mat4 initialized to the given
+     * values. If values is not provided then the Mat4
+     * is initialized to all zeros.
+     */
+    constructor(values) {
+        this.values = new Float32Array(16);
+        if (values !== undefined) {
+            this.init(values);
+        }
     }
     /**
      * Returns the element at the given index.

@@ -8,17 +8,6 @@ import { epsilon } from "./Constants.js";
  */
 export class Mat3 {
     /**
-     * Creates a new Mat3 initialized to the given
-     * values. If values is not provided then the Mat3
-     * is initialized to all zeros.
-     */
-    constructor(values) {
-        this.values = new Float32Array(9);
-        if (values !== undefined) {
-            this.init(values);
-        }
-    }
-    /**
      * Computes the matrix product m1 * m2 and puts the result
      * in dest. If dest is not provided then a new Mat3 is created
      * and returned
@@ -57,6 +46,17 @@ export class Mat3 {
             a20 * b02 + a21 * b12 + a22 * b22,
         ]);
         return dest;
+    }
+    /**
+     * Creates a new Mat3 initialized to the given
+     * values. If values is not provided then the Mat3
+     * is initialized to all zeros.
+     */
+    constructor(values) {
+        this.values = new Float32Array(9);
+        if (values !== undefined) {
+            this.init(values);
+        }
     }
     /**
      * Returns the element at the given index.
